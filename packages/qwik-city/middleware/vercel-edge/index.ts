@@ -27,6 +27,32 @@ export function createQwikCity(opts: QwikCityVercelEdgeOptions) {
   if (opts.manifest) {
     setServerPlatform(opts.manifest);
   }
+  async function onVercelServerlessRequest(req: Request, res: Response) {
+    if (req.url) {
+      const [_path, search] = req.url.split('?');
+      const params = new URLSearchParams(search);
+      let pathname = params.get('__pathname');
+
+      if (pathname) {
+        params.delete('__pathname');
+        pathname = pathname.replace(/\/+/g, '/');
+        req.url = `${pathname}?${params}`;
+      }
+    }
+    let request;
+    try {
+      request = await getRequest({
+        base: `https://${req.headers.host}`,
+        request: req,
+      });
+    } catch (err) {
+      res.statusCode = err.status || 400;
+      return res.end('Invalid request body');
+    }
+    const response = await onVercelEdgeRequest(request);
+
+    setResponse(res, response);
+  }
   async function onVercelEdgeRequest(request: Request) {
     try {
       const url = new URL(request.url);
@@ -100,13 +126,19 @@ export function createQwikCity(opts: QwikCityVercelEdgeOptions) {
     }
   }
 
-  return onVercelEdgeRequest;
+  let env = opts.env || 'edge';
+  if (env !== 'edge' && env !== 'serverless') {
+    env = 'edge';
+  }
+  return env === 'edge' ? onVercelEdgeRequest : onVercelServerlessRequest;
 }
 
 /**
  * @public
  */
-export interface QwikCityVercelEdgeOptions extends ServerRenderOptions {}
+export interface QwikCityVercelEdgeOptions extends ServerRenderOptions {
+  env?: 'edge' | 'serverless';
+}
 
 /**
  * @public

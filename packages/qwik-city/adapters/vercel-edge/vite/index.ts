@@ -73,11 +73,24 @@ export function vercelEdgeAdapter(opts: VercelEdgeAdapterOptions = {}): any {
       // https://vercel.com/docs/build-output-api/v3#vercel-primitives/edge-functions/configuration
       const vcConfigPath = join(serverOutDir, '.vc-config.json');
       const vcConfig = {
-        runtime: 'edge',
-        entrypoint,
-        envVarsInUse: opts.vcConfigEnvVarsInUse,
+        edge: {
+          runtime: 'edge',
+          entrypoint,
+          envVarsInUse: opts.vcConfigEnvVarsInUse,
+        },
+        serverless: {
+          runtime: 'nodejs18.x',
+          handler: entrypoint,
+          maxDuration: 60,
+          launcherType: 'Nodejs',
+          shouldAddSourcemapSupport: true,
+        },
       };
-      await fs.promises.writeFile(vcConfigPath, JSON.stringify(vcConfig, null, 2));
+      let env = opts.vcEnv || 'edge';
+      if (env !== 'edge' && env !== 'serverless') {
+        env = 'edge';
+      }
+      await fs.promises.writeFile(vcConfigPath, JSON.stringify(vcConfig[env], null, 2));
 
       // vercel places all of the static files into the .vercel/output/static directory
       // move from the dist directory to vercel's output static directory
@@ -131,6 +144,11 @@ export interface VercelEdgeAdapterOptions extends ServerAdapterOptions {
    * come from a static file, rather than a server-side rendered response.
    */
   staticPaths?: string[];
+
+  /**
+   * Environment where the app is to be deployed. Defaults to edge
+   */
+  vcEnv?: 'edge' | 'serverless';
 }
 
 /**
